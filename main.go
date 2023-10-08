@@ -9,12 +9,26 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	db "comment-service/dbConnector"
 	"github.com/jinzhu/gorm"
+	"github.com/go-playground/validator/v10"
 )
+
+type CustomValidator struct {
+    validator *validator.Validate
+}
+
+func (cv *CustomValidator) Validate(i interface{}) error {
+	if err := cv.validator.Struct(i); err != nil {
+	  // Optionally, you could return the error to give each route more control over the status code
+	  return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	return nil
+}
 
 func main() {
 	e := echo.New()
 
-	//TODO VALIDATIONS
+	//Define validator to validate data in handler
+	e.Validator = &CustomValidator{validator: validator.New()}
 
 	// Middleware
 	e.Use(middleware.Logger())
@@ -37,7 +51,7 @@ func main() {
 
 type Comment struct {
 	gorm.Model
-	Text string `json:"text"`
+	Text string `json:"text" validate:"required"`
 	IsEdited bool `json:"is_edited"`
     EventId int `json:"event_id"`
 }
@@ -52,12 +66,18 @@ func NewComment() *Comment {
 // Handlers
 //----------
 
-func createComment(c echo.Context) error {
+func createComment(c echo.Context) (err error) {
 	
 	com := NewComment()
+	//Bind request data to Comment structure
 	if err := c.Bind(com); err != nil {
 		return err
 	}
+
+	//Validate data
+	if err = c.Validate(com); err != nil {
+		return err
+	  }
     
     //STORE in DB
 	db.GetDB().Create(com)
